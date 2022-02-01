@@ -79,7 +79,7 @@ def test_loop(net, data_loader, n_iter):
             y = color.rgb2ycbcr(out)[:, :, 0]
             gt = color.rgb2ycbcr(norain.squeeze(dim=0).permute(1, 2, 0).byte().numpy())[:, :, 0]
             psnr = peak_signal_noise_ratio(gt, y, data_range=255)
-            ssim = structural_similarity(gt, y, data_range=255)
+            ssim = structural_similarity(gt, y, data_range=255, gaussian_weights=True, sigma=1.5)
             total_psnr += psnr
             total_ssim += ssim
             count += 1
