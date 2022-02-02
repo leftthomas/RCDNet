@@ -4,11 +4,10 @@ import time
 import pandas as pd
 import torch
 from PIL import Image
-from skimage import color
-from skimage.metrics import peak_signal_noise_ratio, structural_similarity
 from torch.optim import Adam
 from torch.optim.lr_scheduler import MultiStepLR
 from torch.utils.data import DataLoader
+from torchmetrics.functional import peak_signal_noise_ratio, structural_similarity_index_measure
 from tqdm import tqdm
 
 from rcdnet import RCDNet
@@ -73,20 +72,23 @@ def test_loop(net, data_loader, n_iter):
     with torch.no_grad():
         test_bar = tqdm(data_loader, initial=1, dynamic_ncols=True)
         for rain, norain, name in test_bar:
-            b_0, list_b, list_r = model(rain.cuda())
-            out = torch.clamp(list_b[-1], 0, 255).squeeze(dim=0).permute(1, 2, 0).byte().cpu().numpy()
-            # computer the metrics with Y channel
-            y = color.rgb2ycbcr(out)[:, :, 0]
-            gt = color.rgb2ycbcr(norain.squeeze(dim=0).permute(1, 2, 0).byte().numpy())[:, :, 0]
-            psnr = peak_signal_noise_ratio(gt, y, data_range=255)
-            ssim = structural_similarity(gt, y, data_range=255, gaussian_weights=True, sigma=1.5)
-            total_psnr += psnr
-            total_ssim += ssim
+            rain, norain = rain.cuda(), norain.cuda()
+            b_0, list_b, list_r = model(rain)
+            out = torch.clamp(list_b[-1], 0, 255).byte()
+            # computer the metrics with Y channel, and use double precision
+            rgb_to_grey = torch.tensor([0.256789, 0.504129, 0.097906]).view(1, -1, 1, 1).to(rain.device)
+            y = torch.sum(out.double() * rgb_to_grey, dim=1, keepdim=True).add(16.0)
+            gt = torch.sum(norain.double() * rgb_to_grey, dim=1, keepdim=True).add(16.0)
+
+            current_psnr = peak_signal_noise_ratio(y, gt, data_range=255.0)
+            current_ssim = structural_similarity_index_measure(y, gt, data_range=255.0)
+            total_psnr += current_psnr.item()
+            total_ssim += current_ssim.item()
             count += 1
             save_path = '{}/{}/{}'.format(args.save_path, args.data_name, name[0])
             if not os.path.exists(os.path.dirname(save_path)):
                 os.makedirs(os.path.dirname(save_path))
-            Image.fromarray(out).save(save_path)
+            Image.fromarray(out.squeeze(dim=0).permute(1, 2, 0).cpu().numpy()).save(save_path)
             test_bar.set_description('Test [{}/{}] PSNR: {:.2f} SSIM: {:.4f}'
                                      .format(n_iter, 1 if args.model_file else args.num_iter,
                                              total_psnr / count, total_ssim / count))
