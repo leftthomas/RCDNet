@@ -36,11 +36,11 @@ class RCDNet(nn.Module):
         self.C_z = nn.Parameter(self.C_z_const, requires_grad=True)
 
         # proxNet
-        self.proxNet_B_0 = Bnet(num_channel, num_block)  # used in initialization process
+        self.proxNet_B_0 = BNet(num_channel, num_block)  # used in initialization process
         self.proxNet_B_S = self.make_Bnet(self.num_stage, num_channel, num_block)
         self.proxNet_M_S = self.make_Mnet(self.num_stage, num_map, num_block)
         # fine-tune at the last
-        self.proxNet_B_last_layer = Bnet(num_channel, num_block)
+        self.proxNet_B_last_layer = BNet(num_channel, num_block)
 
         # for sparse rain layer
         self.tau_const = torch.Tensor([1])
@@ -49,13 +49,13 @@ class RCDNet(nn.Module):
     def make_Bnet(self, iters, num_channel, num_block):
         layers = []
         for i in range(iters):
-            layers.append(Bnet(num_channel, num_block))
+            layers.append(BNet(num_channel, num_block))
         return nn.Sequential(*layers)
 
     def make_Mnet(self, iters, num_map, num_block):
         layers = []
         for i in range(iters):
-            layers.append(Mnet(num_map, num_block))
+            layers.append(MNet(num_map, num_block))
         return nn.Sequential(*layers)
 
     def make_eta(self, iters, const):
@@ -118,7 +118,7 @@ class RCDNet(nn.Module):
         return B0, ListB, ListR
 
 
-def make_resblock(num_block, num_channel):
+def make_block(num_block, num_channel):
     layers = []
     for i in range(num_block):
         layers.append(nn.Sequential(
@@ -132,35 +132,35 @@ def make_resblock(num_block, num_channel):
 
 
 # proxNet_M
-class Mnet(nn.Module):
+class MNet(nn.Module):
     def __init__(self, num_map, num_block):
-        super(Mnet, self).__init__()
+        super(MNet, self).__init__()
         self.channels = num_map
         self.num_block = num_block
-        self.layer = make_resblock(self.num_block, self.channels)
+        self.layer = make_block(self.num_block, self.channels)
         self.tau0 = torch.Tensor([0.5])
         self.tau_const = self.tau0.unsqueeze(dim=0).unsqueeze(dim=0).unsqueeze(dim=0).expand(-1, self.channels, -1, -1)
         # for sparse rain map
         self.tau = nn.Parameter(self.tau_const, requires_grad=True)
 
-    def forward(self, input):
-        M = input
+    def forward(self, x):
+        m = x
         for i in range(self.num_block):
-            M = F.relu(M + self.layer[i](M))
-        M = F.relu(M - self.tau)
-        return M
+            m = F.relu(m + self.layer[i](m))
+        m = F.relu(m - self.tau)
+        return m
 
 # proxNet_B
-class Bnet(nn.Module):
+class BNet(nn.Module):
     def __init__(self, num_channel, num_block):
-        super(Bnet, self).__init__()
+        super(BNet, self).__init__()
         # 3 means R,G,B channels for color image
         self.channels = num_channel + 3
         self.num_block = num_block
-        self.layer = make_resblock(self.num_block, self.channels)
+        self.layer = make_block(self.num_block, self.channels)
 
-    def forward(self, input):
-        B = input
+    def forward(self, x):
+        b = x
         for i in range(self.num_block):
-            B = F.relu(B + self.layer[i](B))
-        return B
+            b = F.relu(b + self.layer[i](b))
+        return b

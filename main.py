@@ -7,11 +7,10 @@ from PIL import Image
 from torch.optim import Adam
 from torch.optim.lr_scheduler import MultiStepLR
 from torch.utils.data import DataLoader
-from torchmetrics.functional import peak_signal_noise_ratio, structural_similarity_index_measure
 from tqdm import tqdm
 
 from rcdnet import RCDNet
-from utils import parse_args, RainDataset
+from utils import parse_args, RainDataset, rgb_to_y, psnr, ssim
 
 
 def train_loop(net, data_loader, n_iter):
@@ -46,13 +45,9 @@ def test_loop(net, data_loader, n_iter):
             rain, norain = rain.cuda(), norain.cuda()
             b_0, list_b, list_r = model(rain)
             out = torch.clamp(list_b[-1], 0, 255).byte()
-            # computer the metrics with Y channel, and use double precision
-            rgb_to_grey = torch.tensor([0.256789, 0.504129, 0.097906]).view(1, -1, 1, 1).to(rain.device)
-            y = torch.sum(out.double() * rgb_to_grey, dim=1, keepdim=True).add(16.0)
-            gt = torch.sum(norain.double() * rgb_to_grey, dim=1, keepdim=True).add(16.0)
-
-            current_psnr = peak_signal_noise_ratio(y, gt, data_range=255.0)
-            current_ssim = structural_similarity_index_measure(y, gt, data_range=255.0)
+            # computer the metrics with Y channel and double precision
+            y, gt = rgb_to_y(out.double()), rgb_to_y(norain.double())
+            current_psnr, current_ssim = psnr(y, gt), ssim(y, gt)
             total_psnr += current_psnr.item()
             total_ssim += current_ssim.item()
             count += 1
