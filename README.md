@@ -15,11 +15,6 @@ A PyTorch implementation of RCDNet based on CVPR 2020 paper
 conda install pytorch=1.10.1 torchvision cudatoolkit -c pytorch
 ```
 
-- [TorchMetrics](https://torchmetrics.readthedocs.io/en/latest/)
-```
-pip install torchmetrics
-```
-
 ## Dataset
 
 [Rain100L](https://mega.nz/file/MpgnwYDS#jqyDEyL1U9srLBbEFCPnAOZb2HZTsSrwSvRGQ6m6Dzc),
