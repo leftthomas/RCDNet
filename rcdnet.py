@@ -3,13 +3,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-# rain kernel C initialized by the Matlab code "init_rain_kernel.m"
-rain_kernel = io.loadmat('init_kernel.mat')['C9']  # 3*32*9*9
-kernel = torch.FloatTensor(rain_kernel)
-
-# filtering on rainy image for initializing B^(0) and Z^(0), refer to supplementary material(SM)
-filter = torch.FloatTensor([[1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0]]) / 9
-filter = filter.unsqueeze(dim=0).unsqueeze(dim=0)
+# rain kernel C [3*32*9*9]
+rain_kernel = torch.FloatTensor(io.loadmat('kernel.mat')['C9'])
+# filtering on rainy image for initializing B^(0) and Z^(0)
+rain_filter = torch.ones(1, 1, 3, 3).div(9)
 
 
 class RCDNet(nn.Module):
@@ -21,101 +18,93 @@ class RCDNet(nn.Module):
         self.num_map = num_map
         self.num_channel = num_channel
 
-        # Stepsize
-        self.etaM = torch.Tensor([1])  # initialization
-        self.etaB = torch.Tensor([5])  # initialization
-        self.etaM_S = self.make_eta(self.iter, self.etaM)
-        self.etaB_S = self.make_eta(self.num_stage, self.etaB)
+        # step size
+        self.etaM_S = nn.Parameter(torch.ones(self.iter, 1))
+        self.etaB_S = nn.Parameter(torch.ones(self.num_stage, 1).mul(5))
 
-        # Rain kernel
-        self.C0 = nn.Parameter(data=kernel, requires_grad=True)  # used in initialization process
-        self.C = nn.Parameter(data=kernel, requires_grad=True)  # self.C (rain kernel) is inter-stage sharing
+        # rain kernel
+        self.C0 = nn.Parameter(data=rain_kernel)
+        # self.C (rain kernel) is inter-stage sharing
+        self.C = nn.Parameter(data=rain_kernel)
 
         # filter for initializing B and Z
-        self.C_z_const = filter.expand(self.num_channel, 3, -1, -1)  # size: self.num_Z*3*3*3
-        self.C_z = nn.Parameter(self.C_z_const, requires_grad=True)
+        self.C_z_const = rain_filter.expand(self.num_channel, 3, -1, -1)  # size: self.num_Z*3*3*3
+        self.C_z = nn.Parameter(self.C_z_const)
 
         # proxNet
         self.proxNet_B_0 = BNet(num_channel, num_block)  # used in initialization process
-        self.proxNet_B_S = self.make_Bnet(self.num_stage, num_channel, num_block)
-        self.proxNet_M_S = self.make_Mnet(self.num_stage, num_map, num_block)
+        self.proxNet_B_S = self.make_BNet(self.num_stage, num_channel, num_block)
+        self.proxNet_M_S = self.make_MNet(self.num_stage, num_map, num_block)
         # fine-tune at the last
         self.proxNet_B_last_layer = BNet(num_channel, num_block)
 
         # for sparse rain layer
-        self.tau_const = torch.Tensor([1])
-        self.tau = nn.Parameter(self.tau_const, requires_grad=True)
+        self.tau = nn.Parameter(torch.ones(1))
 
-    def make_Bnet(self, iters, num_channel, num_block):
+    def make_BNet(self, num_iter, num_channel, num_block):
         layers = []
-        for i in range(iters):
+        for i in range(num_iter):
             layers.append(BNet(num_channel, num_block))
         return nn.Sequential(*layers)
 
-    def make_Mnet(self, iters, num_map, num_block):
+    def make_MNet(self, num_iter, num_map, num_block):
         layers = []
-        for i in range(iters):
+        for i in range(num_iter):
             layers.append(MNet(num_map, num_block))
         return nn.Sequential(*layers)
 
-    def make_eta(self, iters, const):
-        const_dimadd = const.unsqueeze(dim=0)
-        const_f = const_dimadd.expand(iters, -1)
-        eta = nn.Parameter(data=const_f, requires_grad=True)
-        return eta
-
-    def forward(self, input):
+    def forward(self, x):
         # save mid-updating results
-        ListB = []
-        ListR = []
-
-        # initialize B0 and Z0 (M0 =0)
-        Z00 = F.conv2d(input, self.C_z, stride=1, padding=1)  # dual variable z
-        input_ini = torch.cat((input, Z00), dim=1)
-        BZ_ini = self.proxNet_B_0(input_ini)
-        B0 = BZ_ini[:, :3, :, :]
-        Z0 = BZ_ini[:, 3:, :, :]
+        list_b, list_r = [], []
+        # initialize B0 and Z0 (M0=0)
+        z00 = F.conv2d(x, self.C_z, stride=1, padding=1)  # dual variable z
+        input_ini = torch.cat((x, z00), dim=1)
+        bz_ini = self.proxNet_B_0(input_ini)
+        b0 = bz_ini[:, :3, :, :]
+        z0 = bz_ini[:, 3:, :, :]
 
         # 1st iteration：Updating B0-->M1
-        R_hat = input - B0
-        R_hat_cut = F.relu(R_hat - self.tau)  # for sparse rain layer
-        Epsilon = F.conv_transpose2d(R_hat_cut, self.C0 / 10, stride=1,
-                                     padding=4)  # /10 for controlling the updating speed
-        M1 = self.proxNet_M_S[0](Epsilon)
-        R = F.conv2d(M1, self.C / 10, stride=1, padding=4)  # /10 for controlling the updating speed
+        r_hat = x - b0
+        # for sparse rain layer
+        r_hat_cut = F.relu(r_hat - self.tau)
+        # /10 for controlling the updating speed
+        epsilon = F.conv_transpose2d(r_hat_cut, self.C0.div(10), stride=1, padding=4)
+        m1 = self.proxNet_M_S[0](epsilon)
+        # /10 for controlling the updating speed
+        r = F.conv2d(m1, self.C.div(10), stride=1, padding=4)
 
         # 1st iteration: Updating M1-->B1
-        B_hat = input - R
-        B_mid = (1 - self.etaB_S[0] / 10) * B0 + self.etaB_S[0] / 10 * B_hat
-        input_concat = torch.cat((B_mid, Z0), dim=1)
-        BZ = self.proxNet_B_S[0](input_concat)
-        B1 = BZ[:, :3, :, :]
-        Z1 = BZ[:, 3:, :, :]
-        ListB.append(B1)
-        ListR.append(R)
-        B = B1
-        Z = Z1
-        M = M1
+        b_hat = x - r
+        b_mid = (1 - self.etaB_S[0] / 10) * b0 + self.etaB_S[0] / 10 * b_hat
+        input_concat = torch.cat((b_mid, z0), dim=1)
+        bz = self.proxNet_B_S[0](input_concat)
+        b1 = bz[:, :3, :, :]
+        z1 = bz[:, 3:, :, :]
+        list_b.append(b1)
+        list_r.append(r)
+        b = b1
+        z = z1
+        m = m1
         for i in range(self.iter):
             # M-net
-            R_hat = input - B
-            Epsilon = self.etaM_S[i, :] / 10 * F.conv_transpose2d((R - R_hat), self.C / 10, stride=1, padding=4)
-            M = self.proxNet_M_S[i + 1](M - Epsilon)
+            r_hat = x - b
+            epsilon = self.etaM_S[i, :] / 10 * F.conv_transpose2d((r - r_hat), self.C.div(10), stride=1, padding=4)
+            m = self.proxNet_M_S[i + 1](m - epsilon)
 
             # B-net
-            R = F.conv2d(M, self.C / 10, stride=1, padding=4)
-            ListR.append(R)
-            B_hat = input - R
-            B_mid = (1 - self.etaB_S[i + 1, :] / 10) * B + self.etaB_S[i + 1, :] / 10 * B_hat
-            input_concat = torch.cat((B_mid, Z), dim=1)
-            BZ = self.proxNet_B_S[i + 1](input_concat)
-            B = BZ[:, :3, :, :]
-            Z = BZ[:, 3:, :, :]
-            ListB.append(B)
-        BZ_adjust = self.proxNet_B_last_layer(BZ)
-        B = BZ_adjust[:, :3, :, :]
-        ListB.append(B)
-        return B0, ListB, ListR
+            r = F.conv2d(m, self.C.div(10), stride=1, padding=4)
+            list_r.append(r)
+            b_hat = x - r
+            b_mid = (1 - self.etaB_S[i + 1, :] / 10) * b + self.etaB_S[i + 1, :] / 10 * b_hat
+            input_concat = torch.cat((b_mid, z), dim=1)
+            bz = self.proxNet_B_S[i + 1](input_concat)
+            b = bz[:, :3, :, :]
+            z = bz[:, 3:, :, :]
+            list_b.append(b)
+        bz_adjust = self.proxNet_B_last_layer(bz)
+        b = bz_adjust[:, :3, :, :]
+        list_b.append(b)
+        return b0, list_b, list_r
 
 
 def make_block(num_block, num_channel):
