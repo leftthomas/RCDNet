@@ -1,8 +1,7 @@
 # RCDNet
 
 A PyTorch implementation of RCDNet based on CVPR 2020 paper
-[A Model-driven Deep Neural Network for Single Image Rain Removal](https://openaccess.thecvf.com/content_CVPR_2020/papers/Wang_A_Model-Driven_Deep_Neural_Network_for_Single_Image_Rain_Removal_CVPR_2020_paper.pdf)
-.
+[A Model-driven Deep Neural Network for Single Image Rain Removal](https://arxiv.org/abs/2005.01333).
 
 ## Requirements
 
