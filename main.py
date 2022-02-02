@@ -20,14 +20,12 @@ def train_loop(net, data_loader, n_iter):
     for rain, norain, name in train_bar:
         rain, norain = rain.cuda(), norain.cuda()
         b_0, list_b, list_r = net(rain)
-        loss_bs, loss_rs = 0.0, 0.0
-        for j in range(args.num_stage):
-            loss_bs = loss_bs + 0.1 * F.mse_loss(list_b[j], norain)
-            loss_rs = loss_rs + 0.1 * F.mse_loss(list_r[j], rain - norain)
+        loss_bs = torch.stack([F.mse_loss(list_b[i], norain) for i in range(args.num_stage)]).sum()
+        loss_rs = torch.stack([F.mse_loss(list_r[i], rain - norain) for i in range(args.num_stage)]).sum()
         loss_b = F.mse_loss(list_b[-1], norain)
         loss_r = F.mse_loss(list_r[-1], rain - norain)
         loss_b0 = F.mse_loss(b_0, norain)
-        loss = 0.1 * loss_b0 + loss_bs + loss_b + loss_rs + 0.9 * loss_r
+        loss = 0.1 * loss_b0 + 0.1 * loss_bs + loss_b + 0.1 * loss_rs + 0.9 * loss_r
 
         optimizer.zero_grad()
         loss.backward()
