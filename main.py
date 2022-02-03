@@ -64,8 +64,8 @@ def test_loop(net, data_loader, n_iter):
 def save_loop(net, data_loader, n_iter):
     global best_psnr, best_ssim
     val_psnr, val_ssim = test_loop(net, data_loader, n_iter)
-    results['PSNR'].append('%.2f' % val_psnr)
-    results['SSIM'].append('%.4f' % val_ssim)
+    results['PSNR'].append('{:.2f}'.format(val_psnr))
+    results['SSIM'].append('{:.4f}'.format(val_ssim))
     # save statistics
     data_frame = pd.DataFrame(data=results, index=range(1, n_iter + 1))
     data_frame.to_csv('{}/{}.csv'.format(args.save_path, args.data_name), index_label='epoch')
@@ -92,6 +92,6 @@ if __name__ == '__main__':
         results['Loss'] = []
         for epoch in range(1, args.num_iter + 1):
             train_loss = train_loop(model, train_loader, epoch)
-            results['Loss'].append(train_loss)
+            results['Loss'].append('{:.4f}'.format(train_loss))
             lr_scheduler.step()
             save_loop(model, test_loader, epoch)
