@@ -55,7 +55,7 @@ def test_loop(net, data_loader, n_iter):
             if not os.path.exists(os.path.dirname(save_path)):
                 os.makedirs(os.path.dirname(save_path))
             Image.fromarray(out.squeeze(dim=0).permute(1, 2, 0).cpu().numpy()).save(save_path)
-            test_bar.set_description('Test Epoch: [{}/{}] PSNR: {:.2f} SSIM: {:.4f}'
+            test_bar.set_description('Test Epoch: [{}/{}] PSNR: {:.4f} SSIM: {:.4f}'
                                      .format(n_iter, 1 if args.model_file else args.num_iter,
                                              total_psnr / count, total_ssim / count))
     return total_psnr / count, total_ssim / count
@@ -64,11 +64,11 @@ def test_loop(net, data_loader, n_iter):
 def save_loop(net, data_loader, n_iter):
     global best_psnr, best_ssim
     val_psnr, val_ssim = test_loop(net, data_loader, n_iter)
-    results['PSNR'].append('{:.2f}'.format(val_psnr))
+    results['PSNR'].append('{:.4f}'.format(val_psnr))
     results['SSIM'].append('{:.4f}'.format(val_ssim))
     # save statistics
     data_frame = pd.DataFrame(data=results, index=range(1, n_iter + 1))
-    data_frame.to_csv('{}/{}.csv'.format(args.save_path, args.data_name), index_label='epoch')
+    data_frame.to_csv('{}/{}.csv'.format(args.save_path, args.data_name), index_label='epoch', float_format='%.4f')
     if val_psnr > best_psnr and val_ssim > best_ssim:
         best_psnr, best_ssim = val_psnr, val_ssim
         torch.save(model.state_dict(), '{}/{}.pth'.format(args.save_path, args.data_name))
