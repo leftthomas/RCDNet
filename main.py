@@ -71,6 +71,8 @@ def save_loop(net, data_loader, n_iter):
     data_frame.to_csv('{}/{}.csv'.format(args.save_path, args.data_name), index_label='epoch', float_format='%.4f')
     if val_psnr > best_psnr and val_ssim > best_ssim:
         best_psnr, best_ssim = val_psnr, val_ssim
+        with open('{}/{}.txt'.format(args.save_path, args.data_name), 'w') as f:
+            f.write('Epoch: {} PSNR:{:.2f} SSIM:{:.4f}'.format(n_iter, best_psnr, best_ssim))
         torch.save(model.state_dict(), '{}/{}.pth'.format(args.save_path, args.data_name))
 
 
