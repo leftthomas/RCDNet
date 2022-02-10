@@ -86,14 +86,14 @@ The models are trained on one NVIDIA GeForce RTX 3090 GPU (24G). All the hyper-p
 <tbody>
   <tr>
     <td align="center">Ours</td>
-    <td align="center"> </td>
-    <td align="center"> </td>
-    <td align="center"> </td>
-    <td align="center"> </td>
-    <td align="center"> </td>
-    <td align="center"> </td>
-    <td align="center"> </td>
-    <td align="center"> </td>
+    <td align="center"><b>40.29</b></td>
+    <td align="center"><b>0.9869</b></td>
+    <td align="center"><b>32.02</b></td>
+    <td align="center"><b>0.9180</b></td>
+    <td align="center"><b>33.28</b></td>
+    <td align="center"><b>0.9494</b></td>
+    <td align="center">37.81</td>
+    <td align="center">0.9631</td>
     <td align="center"><a href="https://mega.nz/folder/t4wi1QhZ#zhr0_u0_vr4bD9xDTwFuig">MEGA</a></td>
   </tr>
   <tr>
@@ -104,9 +104,16 @@ The models are trained on one NVIDIA GeForce RTX 3090 GPU (24G). All the hyper-p
     <td align="center">0.9093</td>
     <td align="center">33.04</td>
     <td align="center">0.9472</td>
-    <td align="center">41.47</td>
-    <td align="center">0.9834</td>
+    <td align="center"><b>41.47</b></td>
+    <td align="center"><b>0.9834</b></td>
     <td align="center"><a href="https://github.com/hongwang01/RCDNet_simple">Github</a></td>
   </tr>
 </tbody>
 </table>
+
+## Results
+
+More results could be downloaded
+from [Dropbox](https://www.dropbox.com/sh/cre1s4cgm4n87o7/AAAMU_S7UnQW5RnEsu_qznX_a?dl=0).
+
+![vis](result/vis.png)
